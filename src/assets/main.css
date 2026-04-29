@@ -1,0 +1,133 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  /* Fluent 2 Colors */
+  --fluent-blue: #0078D4;
+  --fluent-blue-dark: #005A9E;
+  --fluent-blue-light: #2B88D8;
+  
+  /* Backgrounds */
+  --bg-app: #f3f3f3;
+  --bg-card: rgba(255, 255, 255, 0.7);
+  --bg-card-hover: rgba(255, 255, 255, 0.85);
+  
+  /* Text */
+  --text-primary: #242424;
+  --text-secondary: #616161;
+  --text-disabled: #A1A1A1;
+  --text-on-accent: #ffffff;
+
+  /* Borders & Shadows */
+  --border-subtle: rgba(0, 0, 0, 0.05);
+  --shadow-flyout: 0 8px 16px rgba(0, 0, 0, 0.14);
+  --shadow-card: 0 2px 4px rgba(0, 0, 0, 0.04), 0 0 2px rgba(0, 0, 0, 0.06);
+  --shadow-card-hover: 0 4px 8px rgba(0, 0, 0, 0.04), 0 0 2px rgba(0, 0, 0, 0.06);
+
+  /* Acrylic / Glassmorphism */
+  --acrylic-blur: blur(20px);
+  --acrylic-fallback: #ffffff;
+
+  /* Geometry & Animation */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  
+  --fluent-easing: cubic-bezier(0.16, 1, 0.3, 1);
+  --fluent-duration: 250ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-app: #202020;
+    --bg-card: rgba(255, 255, 255, 0.05);
+    --bg-card-hover: rgba(255, 255, 255, 0.08);
+    --text-primary: #ffffff;
+    --text-secondary: #D0D0D0;
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --shadow-flyout: 0 8px 16px rgba(0, 0, 0, 0.28);
+    --shadow-card: 0 2px 4px rgba(0, 0, 0, 0.12), 0 0 2px rgba(0, 0, 0, 0.14);
+    --shadow-card-hover: 0 4px 8px rgba(0, 0, 0, 0.12), 0 0 2px rgba(0, 0, 0, 0.14);
+    --acrylic-fallback: #202020;
+  }
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-image: radial-gradient(circle at 50% 0%, rgba(0,120,212,0.1) 0%, transparent 50%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  min-height: 100vh;
+}
+
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Base Acrylic Card */
+.fluent-card {
+  background: var(--bg-card);
+  backdrop-filter: var(--acrylic-blur);
+  -webkit-backdrop-filter: var(--acrylic-blur);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  transition: all var(--fluent-duration) var(--fluent-easing);
+}
+
+.fluent-card:hover {
+  background: var(--bg-card-hover);
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-2px);
+}
+
+/* Primary Button */
+.fluent-btn {
+  background-color: var(--fluent-blue);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--fluent-duration) var(--fluent-easing), transform var(--fluent-duration) var(--fluent-easing);
+}
+
+.fluent-btn:hover {
+  background-color: var(--fluent-blue-light);
+}
+
+.fluent-btn:active {
+  background-color: var(--fluent-blue-dark);
+  transform: scale(0.98);
+}
+
+/* Subtle Button */
+.fluent-btn-subtle {
+  background-color: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+}
+
+.fluent-btn-subtle:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+@media (prefers-color-scheme: dark) {
+  .fluent-btn-subtle:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+}
