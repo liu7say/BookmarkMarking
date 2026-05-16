@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { ChevronRight, ChevronDown, Folder, Link as LinkIcon, Tag } from 'lucide-vue-next';
+import { ChevronRight, ChevronDown, Folder, Link as LinkIcon, Tag, Sparkles, X } from 'lucide-vue-next';
+import { generateTagsForBookmark, type AITaggingResult } from '../utils/aiService';
+import { useBookmarkStore } from '../stores/bookmark';
+import { useSettingsStore } from '../stores/settings';
+import { useTaskStore } from '../stores/task';
+import FButton from './common/FButton.vue';
 
 interface TreeNode {
   id: string;
@@ -22,7 +27,7 @@ const emit = defineEmits<{
   (e: 'edit-tag', node: TreeNode): void
 }>();
 
-const isExpanded = ref(false);
+const isExpanded = ref(props.node.parentId === null);
 
 const toggleExpand = () => {
   if (props.node.type === 'folder') {
@@ -30,9 +35,41 @@ const toggleExpand = () => {
   }
 };
 
-const handleTagClick = (e: Event) => {
-  e.stopPropagation();
-  emit('edit-tag', props.node);
+const store = useBookmarkStore();
+const settingsStore = useSettingsStore();
+const taskStore = useTaskStore();
+
+const aiLogResult = ref<AITaggingResult | null>(null);
+
+const handleAITagging = async () => {
+  if (taskStore.isAnyTagging || props.node.type !== 'bookmark') {
+    if (taskStore.isAnyTagging) {
+      alert('当前已有打标任务正在进行，请稍后再试。');
+    }
+    return;
+  }
+  
+  taskStore.isSingleTagging = true;
+  aiLogResult.value = null; // reset
+  try {
+    const result = await generateTagsForBookmark(props.node.title, props.node.url || '');
+    aiLogResult.value = result;
+    
+    if (result.success && result.tags) {
+      // 合并旧标签并去重
+      const currentTags = props.node.customTags || [];
+      
+      // 获取文件夹标签
+      const folderTags = store.getFolderTags(props.node.id, settingsStore.folderTagBlacklist);
+      
+      const mergedTags = Array.from(new Set([...currentTags, ...result.tags, ...folderTags]));
+      await store.updateTags(props.node.id, mergedTags);
+    }
+  } catch (err: any) {
+    aiLogResult.value = { success: false, error: `错误: ${err.message}` };
+  } finally {
+    taskStore.isSingleTagging = false;
+  }
 };
 
 const defaultIcon = computed(() => {
@@ -73,12 +110,56 @@ const defaultIcon = computed(() => {
             {{ tag }}
           </span>
         </div>
+        <!-- AI 打标按钮 -->
+        <FButton 
+          variant="subtle"
+          size="sm"
+          class="icon-btn ai-btn" 
+          :loading="taskStore.isSingleTagging && aiLogResult === null"
+          :icon="Sparkles"
+          :disabled="taskStore.isAnyTagging"
+          title="AI 自动生成标签"
+          @click.stop="handleAITagging" 
+        />
         
         <!-- 添加/编辑标签按钮 -->
-        <button class="fluent-btn-subtle icon-btn" @click="handleTagClick" title="添加/编辑标签">
-          <Tag :size="14" />
-        </button>
+        <FButton 
+          variant="subtle"
+          size="sm"
+          class="icon-btn" 
+          :icon="Tag"
+          title="添加/编辑标签"
+          @click.stop="$emit('edit-tag', node)"
+        />
       </div>
+    </div>
+
+    <!-- AI 打标详情面板 -->
+    <div class="ai-log-details" v-if="aiLogResult && (settingsStore.showAILogDetails || !aiLogResult.success)">
+      <div class="ai-log-header" :style="{ marginBottom: settingsStore.showAILogDetails ? '12px' : '0' }">
+        <span class="log-status" :class="aiLogResult.success ? 'success' : 'error'">
+          {{ aiLogResult.success ? '✨ 打标成功' : '❌ 打标失败' }}
+        </span>
+        <span class="log-error-text" v-if="!aiLogResult.success">{{ aiLogResult.error }}</span>
+        <FButton 
+          variant="subtle"
+          size="sm"
+          class="close-btn" 
+          :icon="X"
+          title="关闭"
+          @click="aiLogResult = null"
+        />
+      </div>
+      <template v-if="settingsStore.showAILogDetails">
+        <div class="detail-block">
+          <strong>发送给 AI 的内容 (Prompt)：</strong>
+          <pre>{{ aiLogResult.promptUsed || '无记录' }}</pre>
+        </div>
+        <div class="detail-block">
+          <strong>AI 返回的原始内容：</strong>
+          <pre>{{ aiLogResult.rawResponse || '无记录' }}</pre>
+        </div>
+      </template>
     </div>
 
     <!-- Recursive Children Render -->
@@ -148,7 +229,7 @@ const defaultIcon = computed(() => {
 }
 
 .folder-icon {
-  color: #F8D775; /* Classic folder color, or fluent yellow */
+  color: #F8D775;
   fill: #F8D775;
 }
 
@@ -201,15 +282,11 @@ const defaultIcon = computed(() => {
 }
 
 .icon-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   opacity: 0;
-  transition: opacity var(--fluent-duration) var(--fluent-easing), background-color var(--fluent-duration);
+  border: none;
 }
 
 .node-card:hover .icon-btn {
@@ -221,5 +298,102 @@ const defaultIcon = computed(() => {
   margin-top: 4px;
   border-left: 1px dashed var(--border-subtle);
   margin-left: 10px;
+}
+
+.ai-btn {
+  color: #8B5CF6;
+}
+
+.ai-btn:hover {
+  background-color: rgba(139, 92, 246, 0.1) !important;
+}
+
+/* AI 日志面板样式 */
+.ai-log-details {
+  margin: 4px 0 8px 24px;
+  padding: 12px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--fluent-blue);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  font-size: 13px;
+  animation: slide-down 200ms var(--fluent-easing);
+}
+
+@media (prefers-color-scheme: dark) {
+  .ai-log-details {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+}
+
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ai-log-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+  gap: 12px;
+}
+
+.log-status {
+  font-weight: 600;
+}
+
+.log-status.success {
+  color: #059669;
+}
+
+.log-status.error {
+  color: #DC2626;
+}
+
+.log-error-text {
+  color: #DC2626;
+  font-size: 12px;
+}
+
+.close-btn {
+  margin-left: auto;
+  width: 24px;
+  height: 24px;
+  opacity: 1; /* Keep close button visible */
+}
+
+.detail-block {
+  margin-bottom: 12px;
+}
+
+.detail-block:last-child {
+  margin-bottom: 0;
+}
+
+.detail-block strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-primary);
+}
+
+.detail-block pre {
+  margin: 0;
+  padding: 8px 10px;
+  background-color: rgba(0, 0, 0, 0.03);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+@media (prefers-color-scheme: dark) {
+  .detail-block pre {
+    background-color: rgba(0, 0, 0, 0.2);
+  }
 }
 </style>

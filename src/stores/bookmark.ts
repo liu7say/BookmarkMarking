@@ -134,9 +134,65 @@ export const useBookmarkStore = defineStore('bookmark', () => {
     }
   };
 
+  const updateUrl = async (id: string, url: string) => {
+    await db.nodes.update(id, { url });
+    const node = nodes.value.find(n => n.id === id);
+    if (node) {
+      node.url = url;
+    }
+  };
+
+  const updateTitleAndUrl = async (id: string, title: string, url: string) => {
+    await db.nodes.update(id, { title, url });
+    const node = nodes.value.find(n => n.id === id);
+    if (node) {
+      node.title = title;
+      node.url = url;
+    }
+  };
+
   // 获取缺少 icon 的书签列表
   const bookmarksWithoutIcon = computed(() => {
     return nodes.value.filter(n => n.type === 'bookmark' && !n.icon);
+  });
+
+  // 获取没有自定义标签的书签列表
+  const bookmarksWithoutTags = computed(() => {
+    return nodes.value.filter(n => n.type === 'bookmark' && (!n.customTags || n.customTags.length === 0));
+  });
+
+  // 获取标题为 URL 的书签列表（待提取标题）
+  const bookmarksWithUrlAsTitle = computed(() => {
+    return nodes.value.filter(n => {
+      if (n.type !== 'bookmark' || !n.title || !n.url) return false;
+      
+      const titleStr = n.title.trim();
+      const urlStr = n.url.trim();
+      
+      // 1. 标题完全等于 url 或解码后的 url
+      let decodedUrl = urlStr;
+      try { decodedUrl = decodeURI(urlStr); } catch (e) {}
+      
+      if (titleStr === urlStr || titleStr === decodedUrl) return true;
+      
+      // 2. 标题是以 http/https 开头且没有空格，被当作网址
+      if (/^https?:\/\/[^\s]+$/i.test(titleStr)) return true;
+
+      return false;
+    });
+  });
+
+  // 获取 URL 被编码过的书签列表
+  const bookmarksWithEncodedUrl = computed(() => {
+    return nodes.value.filter(n => {
+      if (n.type !== 'bookmark' || !n.url) return false;
+      try {
+        const decoded = decodeURI(n.url);
+        return decoded !== n.url;
+      } catch {
+        return false;
+      }
+    });
   });
 
   // 构建树形结构
@@ -149,6 +205,35 @@ export const useBookmarkStore = defineStore('bookmark', () => {
       }));
   };
 
+  // 清空所有数据
+  const clearAll = async () => {
+    await db.nodes.clear();
+    nodes.value = [];
+  };
+
+  // 获取某个节点的所有父级文件夹名称
+  const getParentFolderNames = (nodeId: string): string[] => {
+    const result: string[] = [];
+    let currentNode = nodes.value.find(n => n.id === nodeId);
+    
+    while (currentNode && currentNode.parentId) {
+      const parent = nodes.value.find(n => n.id === currentNode!.parentId);
+      if (parent && parent.type === 'folder') {
+        result.push(parent.title);
+        currentNode = parent;
+      } else {
+        break;
+      }
+    }
+    return result;
+  };
+
+  // 获取经过黑名单过滤的文件夹标签
+  const getFolderTags = (nodeId: string, blacklist: string[]): string[] => {
+    const parentNames = getParentFolderNames(nodeId);
+    return parentNames.filter(name => !blacklist.includes(name));
+  };
+
   return {
     nodes,
     isLoaded,
@@ -157,8 +242,16 @@ export const useBookmarkStore = defineStore('bookmark', () => {
     mergeNodes,
     updateTags,
     updateIcon,
+    updateUrl,
+    updateTitleAndUrl,
     bookmarksWithoutIcon,
-    getTree
+    bookmarksWithoutTags,
+    bookmarksWithEncodedUrl,
+    bookmarksWithUrlAsTitle,
+    getTree,
+    clearAll,
+    getParentFolderNames,
+    getFolderTags
   };
 });
 

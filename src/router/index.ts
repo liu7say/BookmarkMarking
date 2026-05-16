@@ -11,8 +11,40 @@ const router = createRouter({
     },
     {
       path: '/tools',
-      name: 'tools',
       component: () => import('../views/ToolsView.vue'),
+      redirect: '/tools/favicon',
+      children: [
+        {
+          path: 'favicon',
+          name: 'tool-favicon',
+          component: () => import('../views/tools/FaviconTool.vue'),
+        },
+        {
+          path: 'tagging',
+          name: 'tool-tagging',
+          component: () => import('../views/tools/AITaggingTool.vue'),
+        },
+        {
+          path: 'decoder',
+          name: 'tool-decoder',
+          component: () => import('../views/tools/UrlDecoderTool.vue'),
+        },
+        {
+          path: 'title',
+          name: 'tool-title',
+          component: () => import('../views/tools/AITitleTool.vue'),
+        },
+        {
+          path: 'console',
+          name: 'tool-console',
+          component: () => import('../views/tools/JsonConsoleTool.vue'),
+        }
+      ]
+    },
+    {
+      path: '/settings',
+      name: 'settings',
+      component: () => import('../views/SettingsView.vue'),
     },
     {
       path: '/about',

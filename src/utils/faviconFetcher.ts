@@ -180,9 +180,11 @@ export async function runWithConcurrency<T>(
       const currentIndex = nextIndex++;
       const task = tasks[currentIndex];
       try {
-        const result = await task();
-        results[currentIndex] = result;
-        onTaskDone?.(result, currentIndex);
+        if (task) {
+          const result = await task();
+          results[currentIndex] = result;
+          onTaskDone?.(result, currentIndex);
+        }
       } catch {
         results[currentIndex] = undefined as unknown as T;
       }

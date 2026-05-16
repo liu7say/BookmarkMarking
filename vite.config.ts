@@ -4,11 +4,50 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 
+// 用于解决前端跨域抓取网页 HTML 的自定义插件
+const htmlFetcherPlugin = () => ({
+  name: 'html-fetcher',
+  configureServer(server: any) {
+    server.middlewares.use('/api/fetch-page', async (req: any, res: any) => {
+      try {
+        const urlObj = new URL(req.url || '', 'http://localhost');
+        const targetUrl = urlObj.searchParams.get('url');
+        
+        if (!targetUrl) {
+          res.statusCode = 400;
+          res.end('Missing url parameter');
+          return;
+        }
+
+        const fetchRes = await fetch(targetUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          }
+        });
+        
+        const contentType = fetchRes.headers.get('content-type') || '';
+        if (!contentType.includes('text/html')) {
+          res.end('');
+          return;
+        }
+
+        const html = await fetchRes.text();
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.end(html);
+      } catch (err: any) {
+        res.statusCode = 500;
+        res.end(err.message);
+      }
+    });
+  }
+});
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
     vue(),
     vueDevTools(),
+    htmlFetcherPlugin(),
   ],
   resolve: {
     alias: {

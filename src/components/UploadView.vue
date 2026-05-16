@@ -2,8 +2,10 @@
 import { ref, computed, shallowRef } from 'vue';
 import { useBookmarkStore } from '../stores/bookmark';
 import { parseBookmarkHTML } from '../utils/bookmarkParser';
-import { UploadCloud, RefreshCw, Layers, X } from 'lucide-vue-next';
+import { UploadCloud, RefreshCw, Layers, AlertCircle } from 'lucide-vue-next';
 import type { BookmarkNode } from '../db/database';
+import FButton from './common/FButton.vue';
+import FDialog from './common/FDialog.vue';
 
 const store = useBookmarkStore();
 const isDragging = ref(false);
@@ -118,45 +120,44 @@ const onFileChange = (e: Event) => {
   </div>
 
   <!-- 导入模式选择对话框 -->
-  <Teleport to="body">
-    <div class="dialog-overlay" v-if="showModeDialog" @click.self="handleCancel">
-      <div class="dialog-card fluent-card">
-        <div class="dialog-header">
-          <h3>选择导入方式</h3>
-          <button class="dialog-close" @click="handleCancel">
-            <X :size="16" />
-          </button>
-        </div>
+  <FDialog
+    v-model:show="showModeDialog"
+    title="选择导入方式"
+    :icon="AlertCircle"
+    @cancel="handleCancel"
+  >
+    <template #default>
+      <p class="dialog-desc">
+        检测到已有 <strong>{{ store.nodes.length }}</strong> 条数据，
+        新文件包含 <strong>{{ pendingNodes.length }}</strong> 条记录。
+      </p>
 
-        <p class="dialog-desc">
-          检测到已有 <strong>{{ store.nodes.length }}</strong> 条数据，
-          新文件包含 <strong>{{ pendingNodes.length }}</strong> 条记录。
-        </p>
+      <div class="dialog-options">
+        <button class="option-card" @click="handleMerge">
+          <div class="option-icon merge-icon">
+            <Layers :size="24" />
+          </div>
+          <div class="option-info">
+            <span class="option-title">增量更新</span>
+            <span class="option-desc">保留现有数据，仅添加新书签（按 URL 去重）</span>
+          </div>
+        </button>
 
-        <div class="dialog-options">
-          <button class="option-card" @click="handleMerge">
-            <div class="option-icon merge-icon">
-              <Layers :size="24" />
-            </div>
-            <div class="option-info">
-              <span class="option-title">增量更新</span>
-              <span class="option-desc">保留现有数据，仅添加新书签（按 URL 去重）</span>
-            </div>
-          </button>
-
-          <button class="option-card" @click="handleOverwrite">
-            <div class="option-icon overwrite-icon">
-              <RefreshCw :size="24" />
-            </div>
-            <div class="option-info">
-              <span class="option-title">完全覆盖</span>
-              <span class="option-desc">清空所有现有数据，使用新文件替换</span>
-            </div>
-          </button>
-        </div>
+        <button class="option-card" @click="handleOverwrite">
+          <div class="option-icon overwrite-icon">
+            <RefreshCw :size="24" />
+          </div>
+          <div class="option-info">
+            <span class="option-title">完全覆盖</span>
+            <span class="option-desc">清空所有现有数据，使用新文件替换</span>
+          </div>
+        </button>
       </div>
-    </div>
-  </Teleport>
+    </template>
+    <template #actions>
+      <FButton variant="subtle" @click="handleCancel">取消导入</FButton>
+    </template>
+  </FDialog>
 
   <!-- 合并结果提示 -->
   <Teleport to="body">
@@ -183,7 +184,6 @@ const onFileChange = (e: Event) => {
   background-color: var(--bg-card);
 }
 
-/* 紧凑模式：已有数据时的上传区域 */
 .upload-container.compact {
   padding: 20px 24px;
   border-style: dashed;
@@ -247,79 +247,12 @@ h2 {
   margin: 0;
 }
 
-/* ===== 对话框 ===== */
-.dialog-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  animation: overlay-in 200ms ease;
-}
-
-@keyframes overlay-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.dialog-card {
-  width: 460px;
-  max-width: 90vw;
-  padding: 24px;
-  animation: dialog-in 250ms var(--fluent-easing);
-}
-
-.dialog-card:hover {
-  transform: none;
-}
-
-@keyframes dialog-in {
-  from { opacity: 0; transform: translateY(20px) scale(0.96); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-.dialog-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.dialog-header h3 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.dialog-close {
-  background: none;
-  border: none;
-  padding: 6px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  color: var(--text-secondary);
-  transition: all 150ms;
-}
-
-.dialog-close:hover {
-  background: rgba(0, 0, 0, 0.05);
-  color: var(--text-primary);
-}
-
-@media (prefers-color-scheme: dark) {
-  .dialog-close:hover {
-    background: rgba(255, 255, 255, 0.08);
-  }
-}
-
 .dialog-desc {
   font-size: 13px;
   color: var(--text-secondary);
   margin: 0 0 20px 0;
   line-height: 1.6;
+  text-align: left;
 }
 
 .dialog-options {
@@ -339,6 +272,8 @@ h2 {
   cursor: pointer;
   text-align: left;
   transition: all var(--fluent-duration) var(--fluent-easing);
+  width: 100%;
+  font-family: inherit;
 }
 
 .option-card:hover {
