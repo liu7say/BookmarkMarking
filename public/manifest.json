@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "书签整理大师 (Bookmark Manager)",
+  "version": "1.0.0",
+  "description": "基于 Fluent 2 设计系统的浏览器书签整理与 AI 自动打标工具",
+  "permissions": [
+    "sidePanel",
+    "bookmarks",
+    "activeTab"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "index.html"
+  },
+  "action": {
+    "default_title": "打开书签侧边栏",
+    "default_icon": "favicon.ico"
+  },
+  "icons": {
+    "128": "favicon.ico"
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+X",
+        "mac": "MacCtrl+Shift+X"
+      },
+      "description": "打开书签整理侧边栏"
+    }
+  }
+}

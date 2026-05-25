@@ -1,12 +1,18 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { RouterView, RouterLink, useRoute } from 'vue-router'
 import { Bookmark, Loader2, ChevronDown } from 'lucide-vue-next'
 import { useTaskStore } from './stores/task'
+import { useChromeExtensionStore } from './stores/chromeExtension'
 
 const taskStore = useTaskStore()
+const extensionStore = useChromeExtensionStore()
 const route = useRoute()
 const isToolsDropdownOpen = ref(false)
+
+onMounted(async () => {
+  await extensionStore.initExtension()
+})
 </script>
 
 <template>

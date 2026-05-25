@@ -1,23 +1,50 @@
 <script setup lang="ts">
 import { ref, computed, shallowRef } from 'vue';
 import { useBookmarkStore } from '../stores/bookmark';
+import { useChromeExtensionStore } from '../stores/chromeExtension';
 import { parseBookmarkHTML } from '../utils/bookmarkParser';
-import { UploadCloud, RefreshCw, Layers, AlertCircle } from 'lucide-vue-next';
+import { UploadCloud, RefreshCw, Layers, AlertCircle, Sparkles } from 'lucide-vue-next';
 import type { BookmarkNode } from '../db/database';
 import FButton from './common/FButton.vue';
 import FDialog from './common/FDialog.vue';
 
 const store = useBookmarkStore();
+const extensionStore = useChromeExtensionStore();
 const isDragging = ref(false);
 const fileInput = ref<HTMLInputElement | null>(null);
 
 // 已有数据时判断是否紧凑展示
 const hasData = computed(() => store.nodes.length > 0);
 
+// Chrome Extension environments detection
+const isExtensionEnv = computed(() => typeof chrome !== 'undefined' && !!chrome.bookmarks);
+const isSyncing = ref(false);
+const chromeRuntimeId = computed(() => (typeof chrome !== 'undefined' && chrome.runtime) ? chrome.runtime.id : '');
+
+const onFaviconError = (e: Event) => {
+  const target = e.target as HTMLImageElement;
+  target.style.display = 'none';
+};
+
+const handleChromeSync = async () => {
+  isSyncing.value = true;
+  try {
+    const result = await store.syncChromeBookmarks();
+    mergeResult.value = result;
+    showResultToast.value = true;
+    setTimeout(() => { showResultToast.value = false; }, 4000);
+  } catch (err) {
+    console.error('Chrome 同步失败:', err);
+    alert('无法同步浏览器书签，请检查扩展权限。');
+  } finally {
+    isSyncing.value = false;
+  }
+};
+
 // 对话框状态
 const showModeDialog = ref(false);
 const pendingNodes = shallowRef<BookmarkNode[]>([]);
-const mergeResult = ref<{ added: number; skipped: number } | null>(null);
+const mergeResult = ref<{ added: number; skipped?: number; updated?: number; deleted?: number } | null>(null);
 const showResultToast = ref(false);
 
 const handleFileUpload = async (file: File) => {
@@ -93,6 +120,47 @@ const onFileChange = (e: Event) => {
 </script>
 
 <template>
+  <!-- Chrome 插件特有快捷卡片 -->
+  <div v-if="isExtensionEnv" class="extension-panel-wrapper">
+    <!-- 快捷保存当前页面 -->
+    <div v-if="extensionStore.isActiveTabLoaded && extensionStore.activeTabInfo" class="active-tab-quick-card fluent-card">
+      <div class="active-tab-left">
+        <div class="tab-icon-wrapper">
+          <img 
+            v-if="extensionStore.activeTabInfo.url"
+            :src="`chrome-extension://${chromeRuntimeId}/_favicon/?pageUrl=${encodeURIComponent(extensionStore.activeTabInfo.url)}&size=32`" 
+            class="tab-favicon"
+            @error="onFaviconError"
+          />
+          <UploadCloud v-else :size="16" />
+        </div>
+        <div class="tab-info">
+          <span class="tab-label">⚡ 快捷保存当前网页</span>
+          <span class="tab-title" :title="extensionStore.activeTabInfo.title">{{ extensionStore.activeTabInfo.title }}</span>
+        </div>
+      </div>
+      <FButton variant="primary" size="sm" class="quick-save-btn" @click="extensionStore.addActiveTabToBookmarks()">
+        快捷收录
+      </FButton>
+    </div>
+
+    <!-- 一键同步浏览器书签 -->
+    <div class="sync-extension-card fluent-card">
+      <div class="sync-content-left">
+        <div class="sync-icon-wrapper">
+          <Sparkles :size="20" />
+        </div>
+        <div class="sync-info">
+          <h3>原生书签自动同步</h3>
+          <p>智能同步 Chrome 书签，本地整理结果将与浏览器实时保持双向一致。</p>
+        </div>
+      </div>
+      <FButton variant="primary" size="sm" class="sync-btn" :loading="isSyncing" @click="handleChromeSync">
+        {{ store.nodes.length > 0 ? '重新同步书签' : '一键同步书签' }}
+      </FButton>
+    </div>
+  </div>
+
   <!-- 上传区域 -->
   <div
     class="upload-container fluent-card"
@@ -163,8 +231,12 @@ const onFileChange = (e: Event) => {
   <Teleport to="body">
     <Transition name="toast">
       <div class="result-toast" v-if="showResultToast && mergeResult">
-        新增 <strong>{{ mergeResult.added }}</strong> 条，
-        跳过 <strong>{{ mergeResult.skipped }}</strong> 条重复项
+        <template v-if="mergeResult.updated !== undefined">
+          同步成功：新增 <strong>{{ mergeResult.added }}</strong> 条，更新 <strong>{{ mergeResult.updated }}</strong> 条，删除 <strong>{{ mergeResult.deleted }}</strong> 条
+        </template>
+        <template v-else>
+          导入完成：新增 <strong>{{ mergeResult.added }}</strong> 条，跳过 <strong>{{ mergeResult.skipped }}</strong> 条重复项
+        </template>
       </div>
     </Transition>
   </Teleport>
@@ -348,5 +420,154 @@ h2 {
 @keyframes toast-in {
   from { opacity: 0; transform: translateX(-50%) translateY(16px); }
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ===== Chrome Extension Panels CSS ===== */
+.extension-panel-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+/* 快捷保存当前页面卡片 */
+.active-tab-quick-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  gap: 12px;
+}
+
+.active-tab-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+  flex: 1;
+}
+
+.tab-icon-wrapper {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 120, 212, 0.08);
+  color: var(--fluent-blue);
+  border-radius: var(--radius-md);
+}
+
+.tab-favicon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+.tab-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.tab-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fluent-blue);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-align: left;
+}
+
+.tab-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+.quick-save-btn {
+  flex-shrink: 0;
+}
+
+/* 一键同步浏览器书签卡片 */
+.sync-extension-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  gap: 16px;
+}
+
+.sync-content-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  flex: 1;
+}
+
+.sync-icon-wrapper {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(139, 92, 246, 0.1);
+  color: #8B5CF6;
+  border-radius: var(--radius-md);
+}
+
+.sync-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+}
+
+.sync-info h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.sync-info p {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.sync-btn {
+  flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+  .active-tab-quick-card,
+  .sync-extension-card {
+    padding: 12px !important;
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+  .sync-content-left {
+    align-items: center !important;
+  }
+  .quick-save-btn,
+  .sync-btn {
+    width: 100% !important;
+  }
 }
 </style>

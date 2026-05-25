@@ -92,3 +92,90 @@ body {
   box-shadow: var(--shadow-card-hover);
   /* transform: translateY(-2px); */
 }
+
+/* ===== Responsive Adaptive Layout for Chrome Extension Side Panel ===== */
+@media (max-width: 600px) {
+  /* Compression of global page margins */
+  .app-header {
+    padding: 8px 12px !important;
+  }
+  
+  .header-content {
+    flex-direction: column !important;
+    gap: 8px !important;
+    align-items: stretch !important;
+  }
+
+  .logo-title {
+    display: none !important; /* Hide title to save vertical space in narrow panels */
+  }
+
+  .nav-links {
+    justify-content: space-between !important;
+    width: 100% !important;
+    gap: 2px !important;
+  }
+
+  .nav-item {
+    flex: 1 !important;
+    text-align: center !important;
+    padding: 6px 4px !important;
+    font-size: 12px !important;
+  }
+
+  /* Submenus adjustment */
+  .dropdown-menu {
+    min-width: 150px !important;
+  }
+
+  .app-main {
+    padding: 12px 8px !important;
+  }
+
+  .content-container {
+    max-width: 100% !important;
+  }
+
+  /* Compact Card Paddings */
+  .tree-view-container {
+    padding: 12px !important;
+  }
+
+  .tree-header {
+    margin-bottom: 12px !important;
+    padding-bottom: 8px !important;
+  }
+
+  /* Node Card responsiveness */
+  .node-card {
+    padding: 6px 4px !important;
+    gap: 4px !important;
+  }
+
+  .node-url {
+    max-width: 110px !important; /* Force URL ellipsis in narrow viewports */
+  }
+
+  .tags {
+    flex-wrap: wrap !important;
+    justify-content: flex-end !important;
+    max-width: 80px !important;
+    gap: 2px !important;
+  }
+
+  .tag-badge {
+    font-size: 9px !important;
+    padding: 1px 4px !important;
+  }
+
+  .node-right {
+    gap: 4px !important;
+  }
+
+  /* On narrow screens (like Chrome Side Panel), hover is absent, so make action buttons visible by default */
+  .icon-btn {
+    opacity: 0.75 !important;
+    width: 26px !important;
+    height: 26px !important;
+  }
+}

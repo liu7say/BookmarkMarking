@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { db, type BookmarkNode } from '../db/database';
+import { flattenChromeBookmarks } from '../utils/chromeSync';
 
 export const useBookmarkStore = defineStore('bookmark', () => {
   const nodes = ref<BookmarkNode[]>([]);
@@ -234,6 +235,120 @@ export const useBookmarkStore = defineStore('bookmark', () => {
     return parentNames.filter(name => !blacklist.includes(name));
   };
 
+  // Sync single node from real-time creation event
+  const syncSingleNode = async (cNode: any) => {
+    const type: 'folder' | 'bookmark' = cNode.url ? 'bookmark' : 'folder';
+    const newNode: BookmarkNode = {
+      id: `chrome-${cNode.id}`,
+      parentId: cNode.parentId && cNode.parentId !== '0' ? `chrome-${cNode.parentId}` : null,
+      type,
+      title: cNode.title || '',
+      url: cNode.url,
+      addDate: cNode.dateAdded ? Math.floor(cNode.dateAdded / 1000) : undefined,
+      customTags: [],
+      orderIndex: cNode.index ?? 0
+    };
+    
+    // Check duplication to protect user custom tags
+    const exists = await db.nodes.get(newNode.id);
+    if (!exists) {
+      await db.nodes.add(newNode);
+      await loadNodes();
+    }
+  };
+
+  // Remove single node and recursive children
+  const deleteSingleNode = async (nodeId: string) => {
+    await db.transaction('rw', db.nodes, async () => {
+      const children = await db.nodes.where({ parentId: nodeId }).toArray();
+      for (const child of children) {
+        await deleteSingleNode(child.id);
+      }
+      await db.nodes.delete(nodeId);
+    });
+    await loadNodes();
+  };
+
+  // Move node hierarchically
+  const moveNode = async (nodeId: string, rawParentId: string, index: number) => {
+    const parentId = rawParentId === '0' || !rawParentId ? null : `chrome-${rawParentId}`;
+    await db.nodes.update(nodeId, { parentId, orderIndex: index });
+    await loadNodes();
+  };
+
+  // Update specific node details
+  const updateNodeTitleAndUrl = async (nodeId: string, title: string, url?: string) => {
+    const updateData: Partial<BookmarkNode> = { title };
+    if (url) updateData.url = url;
+    await db.nodes.update(nodeId, updateData);
+    await loadNodes();
+  };
+
+  // Synchronize all Chrome bookmarks to IndexedDB (One-click Incremental Sync)
+  const syncChromeBookmarks = async () => {
+    if (typeof chrome === 'undefined' || !chrome.bookmarks) {
+      throw new Error('Not running in a Chrome Extension environment');
+    }
+    
+    return new Promise<{ added: number; updated: number; deleted: number }>((resolve, reject) => {
+      chrome.bookmarks.getTree(async (results) => {
+        try {
+          const flatNodes = flattenChromeBookmarks(results as any[]);
+          
+          const existingNodes = await db.nodes.toArray();
+          const existingMap = new Map<string, BookmarkNode>();
+          existingNodes.forEach(node => {
+            if (node.id.startsWith('chrome-')) {
+              existingMap.set(node.id, node);
+            }
+          });
+
+          let addedCount = 0;
+          let updatedCount = 0;
+          const currentIds = new Set(flatNodes.map(n => n.id));
+          const idsToDelete: string[] = [];
+
+          existingMap.forEach((node, id) => {
+            if (!currentIds.has(id)) {
+              idsToDelete.push(id);
+            }
+          });
+
+          await db.transaction('rw', db.nodes, async () => {
+            // 1. Perform upserts for current Chrome nodes
+            for (const node of flatNodes) {
+              if (existingMap.has(node.id)) {
+                // Update modified folders/bookmarks, preserving custom tags and icon
+                await db.nodes.update(node.id, {
+                  parentId: node.parentId,
+                  title: node.title,
+                  url: node.url,
+                  orderIndex: node.orderIndex,
+                  lastModified: Math.floor(Date.now() / 1000)
+                });
+                updatedCount++;
+              } else {
+                // Add new bookmark / folder
+                await db.nodes.add(node);
+                addedCount++;
+              }
+            }
+
+            // 2. Remove Chrome bookmarks deleted in the browser
+            if (idsToDelete.length > 0) {
+              await db.nodes.bulkDelete(idsToDelete);
+            }
+          });
+
+          await loadNodes();
+          resolve({ added: addedCount, updated: updatedCount, deleted: idsToDelete.length });
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
+  };
+
   return {
     nodes,
     isLoaded,
@@ -251,7 +366,12 @@ export const useBookmarkStore = defineStore('bookmark', () => {
     getTree,
     clearAll,
     getParentFolderNames,
-    getFolderTags
+    getFolderTags,
+    syncSingleNode,
+    deleteSingleNode,
+    moveNode,
+    updateNodeTitleAndUrl,
+    syncChromeBookmarks
   };
 });
 
